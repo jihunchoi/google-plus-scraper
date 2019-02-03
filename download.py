@@ -1,4 +1,5 @@
 import argparse
+import html
 import json
 import pickle
 import re
@@ -91,10 +92,12 @@ def main():
             if item['verb'] == 'share':
                 actor_line = f'Posted by {actor} (Reshared post)'
                 annotation = item.get('annotation', '').replace('<br />', '\n')
+                annotation = html.unescape(annotation)
                 orig_actor = item['object']['actor'].get('displayName', '???')
                 orig_actor_line = f'Original post by {orig_actor}'
                 orig_content = (
                     item['object'].get('content', '').replace('<br />', '\n'))
+                orig_content = html.unescape(orig_content)
                 formatted = (f'{actor_line}\n'
                              f'----------------------------------------\n'
                              f'{annotation}\n'
@@ -105,6 +108,7 @@ def main():
             else:
                 actor_line = f'Posted by {actor}'
                 content = item['object']['content'].replace('<br />', '\n')
+                content = html.unescape(content)
                 formatted = (f'{actor_line}\n'
                              f'----------------------------------------\n'
                              f'{content}')
