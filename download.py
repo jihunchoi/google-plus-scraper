@@ -3,6 +3,7 @@ import json
 import pickle
 import re
 import shutil
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -38,6 +39,10 @@ def download_file(url, save_dir):
 
 
 def download_media(album_url, save_dir):
+    print(f'Connecting to {album_url}')
+    if 'youtu' in album_url:
+        subprocess.run(['you-get', album_url, '-o', str(save_dir)])
+        return 999
     album_req = utils.requests_retry_session().get(album_url)
     if album_req.status_code == 200:
         pattern = '(http.*?video-downloads\.googleusercontent\.com.*?)"'
@@ -65,52 +70,62 @@ def main():
 
     failed = []
     for i, item in enumerate(items):
-        if i < args.resume:
-            continue
-        print(f'Start #{i}')
-        published_datetime = dateutil.parser.parse(item['published'])
-        year_month_dir = published_datetime.strftime('%Y_%m')
-        subdir = published_datetime.strftime('%Y_%m_%d_%H_%M_%S')
-        save_dir = out_dir / year_month_dir / subdir
-        if save_dir.exists():
-            shutil.rmtree(save_dir)
+        try:
+            if i < args.resume:
+                continue
+            print(f'Start #{i}')
+            published_datetime = dateutil.parser.parse(item['published'])
+            year_month_dir = published_datetime.strftime('%Y_%m')
+            subdir = published_datetime.strftime('%Y_%m_%d_%H_%M_%S')
+            save_dir = out_dir / year_month_dir / subdir
+            if save_dir.exists():
+                shutil.rmtree(save_dir)
 
-        save_dir.mkdir(parents=True, exist_ok=True)
+            save_dir.mkdir(parents=True, exist_ok=True)
 
-        with open(save_dir / 'raw.json', 'w') as f:
-            json.dump(item, f, ensure_ascii=False)
+            with open(save_dir / 'raw.json', 'w') as f:
+                json.dump(item, f, ensure_ascii=False)
 
-        verb = item['verb']
-        actor = item['actor']['displayName']
-        if item['verb'] == 'share':
-            actor_line = f'Posted by {actor} (Reshared post)'
-            annotation = item.get('annotation', '').replace('<br />', '\n')
-            orig_actor = item['object']['actor'].get('displayName', '???')
-            orig_actor_line = f'Original post by {orig_actor}'
-            orig_content = (
-                item['object'].get('content', '').replace('<br />', '\n'))
-            formatted = (f'{actor_line}\n\n'
-                         f'{annotation}\n'
-                         f'----------------------------------------\n'
-                         f'{orig_actor_line}\n\n'
-                         f'{orig_content}')
-        else:
-            actor_line = f'Posted by {actor}'
-            content = item['object']['content'].replace('<br />', '\n')
-            formatted = (f'{actor_line}\n\n'
-                         f'{content}')
-        with open(save_dir / 'content.txt', 'w') as f:
-            f.write(formatted)
+            verb = item['verb']
+            actor = item['actor']['displayName']
+            if item['verb'] == 'share':
+                actor_line = f'Posted by {actor} (Reshared post)'
+                annotation = item.get('annotation', '').replace('<br />', '\n')
+                orig_actor = item['object']['actor'].get('displayName', '???')
+                orig_actor_line = f'Original post by {orig_actor}'
+                orig_content = (
+                    item['object'].get('content', '').replace('<br />', '\n'))
+                formatted = (f'{actor_line}\n'
+                             f'----------------------------------------\n'
+                             f'{annotation}\n'
+                             f'----------------------------------------\n\n'
+                             f'{orig_actor_line}\n'
+                             f'----------------------------------------\n'
+                             f'{orig_content}')
+            else:
+                actor_line = f'Posted by {actor}'
+                content = item['object']['content'].replace('<br />', '\n')
+                formatted = (f'{actor_line}\n'
+                             f'----------------------------------------\n'
+                             f'{content}')
+            with open(save_dir / 'content.txt', 'w') as f:
+                f.write(formatted)
 
-        attachments = item['object'].get('attachments', [])
-        for att in attachments:
-            status_code = download_media(att['url'], save_dir)
-            if status_code != 200:
-                failed.append((i, item['id'], item['url']))
-        print(f'Completed #{i}')
+            attachments = item['object'].get('attachments', [])
+            for att in attachments:
+                status_code = download_media(att['url'], save_dir)
+                if status_code != 200:
+                    failed.append((i, item['id'], item['url']))
+            print(f'Completed #{i}')
+        except Exception as e:
+            print('-' * 40)
+            print(f'Caught exception: {e}')
+            failed.append((i, item['id'], item['url']))
+            break
 
     print('-' * 40)
     print('List of (possibly) failed posts')
+    print('-' * 40)
     for i, id_, url in failed:
         print(f'{i},{id_},{url}')
 
