@@ -96,7 +96,7 @@ def download_media(album_url, save_dir):
             print(f'Extracted dirty url {url}')
             new_status_code = download_file(url, save_dir)
             if new_status_code == 200:
-                return 999
+                return 888
             return new_status_code
     else:
         print(f'Got {album_req.status_code} while extracting URL.')
@@ -166,19 +166,19 @@ def main():
             for att in attachments:
                 status_code = download_media(att['url'], save_dir)
                 if status_code != 200:
-                    failed.append((status_code, i, item['id'], item['url']))
-            print(f'Completed #{i}')
+                    failed.append((i, status_code, item['id'], item['url']))
+            print(f'Completed #{i} ({i + 1}/{len(items)})')
         except Exception as e:
             print('-' * 40)
             print(f'Caught exception: {e}')
-            failed.append((None, i, item['id'], item['url']))
+            failed.append((i, None, item['id'], item['url']))
             break
 
     print('-' * 40)
     print('List of (possibly) failed posts')
     print('-' * 40)
-    for i, id_, url in failed:
-        print(f'{i},{id_},{url}')
+    for i, code, id_, url in failed:
+        print(f'{i},{code},{id_},{url}')
 
 
 if __name__ == '__main__':
