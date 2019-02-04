@@ -109,6 +109,7 @@ def main():
     parser.add_argument('--items', required=True)
     parser.add_argument('--resume', default=0, type=int)
     parser.add_argument('-o', '--out', required=True)
+    parser.add_argument('--retry')
     args = parser.parse_args()
 
     out_dir = Path(args.out)
@@ -119,6 +120,8 @@ def main():
     failed = []
     for i, item in enumerate(items):
         try:
+            if args.retry is not None and item['id'] != args.retry:
+                continue
             if i < args.resume:
                 continue
             print(f'Start #{i}')
@@ -128,6 +131,7 @@ def main():
             save_dir = out_dir / year_month_dir / subdir
             if save_dir.exists():
                 shutil.rmtree(save_dir)
+                pass
 
             save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -162,12 +166,12 @@ def main():
             for att in attachments:
                 status_code = download_media(att['url'], save_dir)
                 if status_code != 200:
-                    failed.append((i, item['id'], item['url']))
+                    failed.append((status_code, i, item['id'], item['url']))
             print(f'Completed #{i}')
         except Exception as e:
             print('-' * 40)
             print(f'Caught exception: {e}')
-            failed.append((i, item['id'], item['url']))
+            failed.append((None, i, item['id'], item['url']))
             break
 
     print('-' * 40)
