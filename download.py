@@ -127,8 +127,7 @@ def main():
             subdir = published_datetime.strftime('%Y_%m_%d_%H_%M_%S')
             save_dir = out_dir / year_month_dir / subdir
             if save_dir.exists():
-                # shutil.rmtree(save_dir)
-                pass
+                shutil.rmtree(save_dir)
 
             save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -159,11 +158,11 @@ def main():
             with open(save_dir / 'content.txt', 'w') as f:
                 f.write(formatted)
 
-            # attachments = item['object'].get('attachments', [])
-            # for att in attachments:
-            #     status_code = download_media(att['url'], save_dir)
-            #     if status_code != 200:
-            #         failed.append((i, item['id'], item['url']))
+            attachments = item['object'].get('attachments', [])
+            for att in attachments:
+                status_code = download_media(att['url'], save_dir)
+                if status_code != 200:
+                    failed.append((i, item['id'], item['url']))
             print(f'Completed #{i}')
         except Exception as e:
             print('-' * 40)
