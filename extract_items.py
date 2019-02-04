@@ -12,7 +12,7 @@ def get_page(user_id, page_token=None):
     if page_token:
         params['pageToken'] = page_token
     api_url = config.API_URL.format(user_id=user_id)
-    req = utils.requests_retry_session().get(config.API_URL, params=params)
+    req = utils.requests_retry_session().get(api_url, params=params)
     json_data = req.json()
     next_page_token = json_data.get('nextPageToken', None)
     return json_data['items'], next_page_token
