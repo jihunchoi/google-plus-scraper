@@ -10,6 +10,7 @@ from pathlib import Path
 
 import dateutil.parser
 import lxml.html
+from requests.exceptions import ConnectionError, HTTPError
 
 import config
 import utils
@@ -61,6 +62,7 @@ def download_file(url, save_dir):
 def download_media(album_url, save_dir):
     print(f'Connecting to {album_url}')
     if 'youtu' in album_url:
+        print(f'Trying to download from youtube, using you-get')
         subprocess.run(['you-get', album_url, '-o', str(save_dir)])
         return 999
     album_req = utils.requests_retry_session().get(album_url)
@@ -164,7 +166,26 @@ def main():
 
             attachments = item['object'].get('attachments', [])
             for att in attachments:
-                status_code = download_media(att['url'], save_dir)
+                if att['objectType'] == 'article':
+                    # If article, just append it to the content.
+                    with open(save_dir / 'content.txt', 'a') as f:
+                        f.write('\n\n')
+                        f.write(f'Link: {att["url"]}')
+                    try:
+                        if 'fullImage' in att:
+                            download_file(att['fullImage']['url'], save_dir)
+                        if 'image' in att:
+                            download_file(att['image']['url'], save_dir)
+                        status_code = 200
+                    except ConnectionError as e:
+                        print(f'Caught exception while downloading thumbnails'
+                              f'(probably can be ignored: {e}')
+                        status_code = 408
+                    except HTTPError as e:
+                        print(f'Caught exception while downloading thumbnails')
+                        status_code = e.response.status_code
+                else:
+                    status_code = download_media(att['url'], save_dir)
                 if status_code != 200:
                     failed.append((i, status_code, item['id'], item['url']))
             print(f'Completed #{i} ({i + 1}/{len(items)})')
