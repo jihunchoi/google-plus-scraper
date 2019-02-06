@@ -39,9 +39,9 @@ def download_file(url, save_dir):
         save_path = Path(save_dir) / filename
         idx = 1
         while save_path.exists():
+            idx += 1
             new_filename = save_path.stem + str(idx) + save_path.suffix
             save_path = save_path.parent / new_filename
-            idx += 1
         print(f'Will save to: {save_path}')
 
         with open(save_path, 'wb') as f:
@@ -120,6 +120,7 @@ def main():
         items = pickle.load(f)
 
     failed = []
+    subdir = ''
     for i, item in enumerate(items):
         try:
             if args.retry is not None and item['id'] != args.retry:
@@ -131,11 +132,23 @@ def main():
             year_month_dir = published_datetime.strftime('%Y_%m')
             subdir = published_datetime.strftime('%Y_%m_%d_%H_%M_%S')
             save_dir = out_dir / year_month_dir / subdir
-            if save_dir.exists():
-                shutil.rmtree(save_dir)
-                pass
 
-            save_dir.mkdir(parents=True, exist_ok=True)
+            idx = 1
+            while save_dir.exists():
+                # If exists, check the raw JSON file first.
+                # Then remove the old directory if it has the same ID as
+                # the item to be added, and rename the save_dir if not.
+                with open(save_dir / 'raw.json', 'r') as f:
+                    old_item = json.load(f)
+                if old_item['id'] == item['id']:
+                    shutil.rmtree(save_dir)
+                    break
+                else:
+                    idx += 1
+                    new_subdir = f'{subdir}_{idx}'
+                    save_dir = out_dir / year_month_dir / new_subdir
+
+            save_dir.mkdir(parents=True)
 
             with open(save_dir / 'raw.json', 'w') as f:
                 json.dump(item, f, ensure_ascii=False)
@@ -178,14 +191,20 @@ def main():
                             download_file(att['image']['url'], save_dir)
                         status_code = 200
                     except ConnectionError as e:
-                        print(f'Caught exception while downloading thumbnails'
-                              f'(probably can be ignored: {e}')
+                        print(f'Caught exception while downloading thumbnails '
+                              f'(probably can be ignored): {e}')
                         status_code = 408
                     except HTTPError as e:
                         print(f'Caught exception while downloading thumbnails')
                         status_code = e.response.status_code
                 else:
-                    status_code = download_media(att['url'], save_dir)
+                    url = att['url']
+                    if (not url.startswith('http://')
+                            and not url.startswith('https://')):
+                        # URL is not given as an absolute path.
+                        prefix = 'https://plus.google.com'
+                        url = prefix + url
+                    status_code = download_media(url, save_dir)
                 if status_code != 200:
                     failed.append((i, status_code, item['id'], item['url']))
             print(f'Completed #{i} ({i + 1}/{len(items)})')
