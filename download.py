@@ -75,31 +75,36 @@ def download_media(album_url, save_dir):
 
         if status_code != 200:
             print('Got failure; going into fallback mode (dirty)')
-            parsed = lxml.html.document_fromstring(album_req.text)
-            script_tags = parsed.cssselect('script')
-            json_data = None
-            for script_tag in script_tags:
-                if ('AF_initDataCallback' in script_tag.text
-                        and "key: 'ds:0'" in script_tag.text):
-                    json_data_str = re.findall(
-                        'return (.*?)}}', script_tag.text, flags=re.S)[0]
-                    json_data = json.loads(json_data_str)
-                    break
-            if json_data is None:
-                return 404
-            url_tups = list(json_data[-1][-1][-1][-1].values())[-1][-1]
-            max_res = 0
-            url = None
-            for url_tup in url_tups:
-                res = url_tup[1] * url_tup[2]
-                if res > max_res:
-                    max_res = res
-                    url = url_tup[3]
-            print(f'Extracted dirty url {url}')
-            new_status_code = download_file(url, save_dir)
-            if new_status_code == 200:
-                return 888
-            return new_status_code
+            try:
+                parsed = lxml.html.document_fromstring(album_req.text)
+                script_tags = parsed.cssselect('script')
+                json_data = None
+                for script_tag in script_tags:
+                    if ('AF_initDataCallback' in script_tag.text
+                            and "key: 'ds:0'" in script_tag.text):
+                        json_data_str = re.findall(
+                            'return (.*?)}}', script_tag.text, flags=re.S)[0]
+                        json_data = json.loads(json_data_str)
+                        break
+                if json_data is None:
+                    return 404
+                url_tups = list(json_data[-1][-1][-1][-1].values())[-1][-1]
+                max_res = 0
+                url = None
+                for url_tup in url_tups:
+                    res = url_tup[1] * url_tup[2]
+                    if res > max_res:
+                        max_res = res
+                        url = url_tup[3]
+                print(f'Extracted dirty url {url}')
+                new_status_code = download_file(url, save_dir)
+                if new_status_code == 200:
+                    return 888
+                return new_status_code
+            except AttributeError:
+                # Possibly due to broken video. Just return 777,
+                # and let's download the thumbnail only...
+                return 777
     else:
         print(f'Got {album_req.status_code} while extracting URL.')
         status_code = album_req.status_code
@@ -206,6 +211,21 @@ def main():
                         url = prefix + url
                     status_code = download_media(url, save_dir)
                 if status_code != 200:
+                    failed.append((i, status_code, item['id'], item['url']))
+                if status_code == 777:
+                    try:
+                        if 'fullImage' in att:
+                            download_file(att['fullImage']['url'], save_dir)
+                        if 'image' in att:
+                            download_file(att['image']['url'], save_dir)
+                        status_code = 200
+                    except ConnectionError as e:
+                        print(f'Caught exception while downloading thumbnails '
+                              f'(probably can be ignored): {e}')
+                        status_code = 408
+                    except HTTPError as e:
+                        print(f'Caught exception while downloading thumbnails')
+                        status_code = e.response.status_code
                     failed.append((i, status_code, item['id'], item['url']))
             print(f'Completed #{i} ({i + 1}/{len(items)})')
         except Exception as e:
